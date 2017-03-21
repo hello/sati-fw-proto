@@ -66,5 +66,3 @@ GOOS=linux GOARCH=arm GOARM=6 go build -o grpc-client-arm client/grpc.go
 mkdir -p greeter
 protoc greeter.proto --go_out=plugins=grpc:greeter
 ```
-
-*Important: 
