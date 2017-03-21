@@ -1,0 +1,1 @@
+GOOS=linux GOARCH=arm GOARM=6 go build -o grpc-client-arm client/grpc.go
