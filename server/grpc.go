@@ -8,13 +8,15 @@ import (
 	"github.com/hello/sati-fw-proto/greeter"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
-	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,84 +29,72 @@ var (
 	alpnProtoStr = []string{"h2"}
 )
 
-type helloTlsCreds struct {
-	// TLS configuration
-	config *tls.Config
+type HelloCertStore interface {
+	Exists(id string) (bool, error)
 }
 
-func (c helloTlsCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{
-		SecurityProtocol: "tls",
-		SecurityVersion:  "1.2",
-		ServerName:       c.config.ServerName,
+type InMemoryHelloCertStore struct {
+	sync.Mutex
+	m map[string]bool
+}
+
+func (s *InMemoryHelloCertStore) Exists(id string) (bool, error) {
+	s.Lock()
+	defer s.Unlock()
+	_, found := s.m[id]
+	return found, nil
+}
+
+func NewHelloTransportCredentialsChecker(c *tls.Config) credentials.TransportCredentials {
+	m := make(map[string]bool)
+	m["sati-pii"] = true
+	return &HelloTransportCredentialsChecker{
+		TransportCredentials: credentials.NewTLS(c),
+		store:                &InMemoryHelloCertStore{m: m},
 	}
 }
 
-func cloneTLSConfig(cfg *tls.Config) *tls.Config {
-	if cfg == nil {
-		return &tls.Config{}
-	}
-
-	return cfg.Clone()
+type HelloTransportCredentialsChecker struct {
+	credentials.TransportCredentials
+	store HelloCertStore
 }
 
-func (c *helloTlsCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	// use local cfg to avoid clobbering ServerName if using multiple endpoints
-	cfg := cloneTLSConfig(c.config)
-	if cfg.ServerName == "" {
-		colonPos := strings.LastIndex(addr, ":")
-		if colonPos == -1 {
-			colonPos = len(addr)
-		}
-		cfg.ServerName = addr[:colonPos]
-	}
-	conn := tls.Client(rawConn, cfg)
-
-	errChannel := make(chan error, 1)
-	go func() {
-		log.Println(time.Now())
-		errChannel <- conn.Handshake()
-	}()
-	select {
-	case err := <-errChannel:
-		if err != nil {
-			return nil, nil, err
-		}
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
-	}
-	return conn, credentials.TLSInfo{conn.ConnectionState()}, nil
-}
-
-func (c *helloTlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-
-	conn := tls.Server(rawConn, c.config)
-
-	if err := conn.Handshake(); err != nil {
+func (c *HelloTransportCredentialsChecker) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	conn, authInfo, err := c.TransportCredentials.ServerHandshake(rawConn)
+	if err != nil {
+		log.Println("original handshake failed")
 		return nil, nil, err
+
 	}
-	for _, peer := range conn.ConnectionState().PeerCertificates {
-		fmt.Printf("%s %s\n", "-->", peer.Subject.CommonName)
+	tlsInfo := authInfo.(credentials.TLSInfo)
+	name := tlsInfo.State.PeerCertificates[0].Subject.CommonName
+	found, err := c.store.Exists(name)
+	if !found {
+		conn.Close()
+		return conn, authInfo, grpc.Errorf(codes.Unauthenticated, fmt.Sprintf("cert not found: %s", name))
 	}
-	return conn, credentials.TLSInfo{conn.ConnectionState()}, nil
-}
 
-func (c *helloTlsCreds) Clone() credentials.TransportCredentials {
-	return NewTLS(c.config)
-}
-
-func NewTLS(c *tls.Config) credentials.TransportCredentials {
-	tc := &helloTlsCreds{cloneTLSConfig(c)}
-	tc.config.NextProtos = alpnProtoStr
-	return tc
-}
-
-func (c *helloTlsCreds) OverrideServerName(serverNameOverride string) error {
-	c.config.ServerName = serverNameOverride
-	return nil
+	fmt.Printf("%s\n", name)
+	return conn, authInfo, err
 }
 
 type server struct{}
+
+func (s *server) EmptyCall(ctx context.Context, in *greeter.Empty) (*greeter.Empty, error) {
+	if md, ok := metadata.FromContext(ctx); ok {
+		// For testing purpose, returns an error if there is attached metadata other than
+		// the user agent set by the client application.
+		if _, ok := md["user-agent"]; !ok {
+			return nil, grpc.Errorf(codes.DataLoss, "missing expected user-agent")
+		}
+		var str []string
+		for _, entry := range md["user-agent"] {
+			str = append(str, "ua", entry)
+		}
+		grpc.SendHeader(ctx, metadata.Pairs(str...))
+	}
+	return new(greeter.Empty), nil
+}
 
 // SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(ctx context.Context, in *greeter.HelloRequest) (*greeter.HelloReply, error) {
@@ -179,7 +169,7 @@ func serverFunc() {
 		ClientCAs:    caCertPool,
 	}
 
-	serverOption := grpc.Creds(NewTLS(tlsConfig))
+	serverOption := grpc.Creds(NewHelloTransportCredentialsChecker(tlsConfig))
 	s := grpc.NewServer(serverOption)
 	greeter.RegisterGreeterServer(s, &server{})
 	log.Println("Serving...")

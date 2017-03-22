@@ -37,16 +37,35 @@ func client(addr, crt, key string) {
 		RootCAs:      caCertPool,
 	})
 
-	dialOption := grpc.WithTransportCredentials(transportCreds)
-	conn, err := grpc.Dial(addr+":50051", dialOption)
+	backOffConfig := grpc.BackoffConfig{
+		MaxDelay: 10 * time.Second,
+	}
+
+	dialOptions := []grpc.DialOption{
+		// grpc.WithTimeout(500 * time.Millisecond),
+		grpc.WithBackoffConfig(backOffConfig),
+		grpc.WithTransportCredentials(transportCreds),
+		grpc.WithUserAgent("grpc-go-client"),
+	}
+
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, addr+":50051", dialOptions...)
+
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
-	defer conn.Close()
-	ctx := context.Background()
-	stream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
-	// c := greeter.NewGreeterClient(conn)
 
+	defer conn.Close()
+
+	c := greeter.NewGreeterClient(conn)
+
+	// Important to attempt the first call when starting to start the tls negotiation check
+	if _, err := c.EmptyCall(ctx, &greeter.Empty{}, grpc.FailFast(true)); err != nil {
+		log.Printf("%v", err)
+		return
+	}
+
+	stream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
 	// Contact the server and print out its response.
 	sendTicker := time.NewTicker(100 * time.Millisecond)
 
@@ -66,10 +85,15 @@ func client(addr, crt, key string) {
 
 	for {
 		select {
+		case <-stream.Context().Done():
+			closeErr := stream.CloseSend()
+			if closeErr != nil {
+				log.Fatal(closeErr)
+			}
 		case <-sendTicker.C:
 			err3 := stream.Send(&greeter.HelloRequest{Name: fmt.Sprintf("name %d", time.Now().Unix())})
 			if err3 != nil {
-				log.Fatal(err3)
+				log.Fatal("err3", err3)
 			}
 		}
 	}

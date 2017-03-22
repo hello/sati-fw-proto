@@ -9,6 +9,7 @@ It is generated from these files:
 	greeter.proto
 
 It has these top-level messages:
+	Empty
 	HelloRequest
 	HelloReply
 */
@@ -34,6 +35,14 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+type Empty struct {
+}
+
+func (m *Empty) Reset()                    { *m = Empty{} }
+func (m *Empty) String() string            { return proto.CompactTextString(m) }
+func (*Empty) ProtoMessage()               {}
+func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+
 // The request message containing the user's name.
 type HelloRequest struct {
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
@@ -42,7 +51,7 @@ type HelloRequest struct {
 func (m *HelloRequest) Reset()                    { *m = HelloRequest{} }
 func (m *HelloRequest) String() string            { return proto.CompactTextString(m) }
 func (*HelloRequest) ProtoMessage()               {}
-func (*HelloRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (*HelloRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *HelloRequest) GetName() string {
 	if m != nil {
@@ -59,7 +68,7 @@ type HelloReply struct {
 func (m *HelloReply) Reset()                    { *m = HelloReply{} }
 func (m *HelloReply) String() string            { return proto.CompactTextString(m) }
 func (*HelloReply) ProtoMessage()               {}
-func (*HelloReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+func (*HelloReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *HelloReply) GetMessage() string {
 	if m != nil {
@@ -69,6 +78,7 @@ func (m *HelloReply) GetMessage() string {
 }
 
 func init() {
+	proto.RegisterType((*Empty)(nil), "Empty")
 	proto.RegisterType((*HelloRequest)(nil), "HelloRequest")
 	proto.RegisterType((*HelloReply)(nil), "HelloReply")
 }
@@ -84,7 +94,7 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Greeter service
 
 type GreeterClient interface {
-	// Sends a greeting
+	EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error)
 	Periodic(ctx context.Context, opts ...grpc.CallOption) (Greeter_PeriodicClient, error)
 }
@@ -95,6 +105,15 @@ type greeterClient struct {
 
 func NewGreeterClient(cc *grpc.ClientConn) GreeterClient {
 	return &greeterClient{cc}
+}
+
+func (c *greeterClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := grpc.Invoke(ctx, "/Greeter/EmptyCall", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
@@ -140,13 +159,31 @@ func (x *greeterPeriodicClient) Recv() (*HelloReply, error) {
 // Server API for Greeter service
 
 type GreeterServer interface {
-	// Sends a greeting
+	EmptyCall(context.Context, *Empty) (*Empty, error)
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
 	Periodic(Greeter_PeriodicServer) error
 }
 
 func RegisterGreeterServer(s *grpc.Server, srv GreeterServer) {
 	s.RegisterService(&_Greeter_serviceDesc, srv)
+}
+
+func _Greeter_EmptyCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GreeterServer).EmptyCall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Greeter/EmptyCall",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GreeterServer).EmptyCall(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Greeter_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -198,6 +235,10 @@ var _Greeter_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*GreeterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "EmptyCall",
+			Handler:    _Greeter_EmptyCall_Handler,
+		},
+		{
 			MethodName: "SayHello",
 			Handler:    _Greeter_SayHello_Handler,
 		},
@@ -216,15 +257,16 @@ var _Greeter_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("greeter.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 147 bytes of a gzipped FileDescriptorProto
+	// 173 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x4d, 0x2f, 0x4a, 0x4d,
-	0x2d, 0x49, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57, 0x52, 0xe2, 0xe2, 0xf1, 0x48, 0xcd,
-	0xc9, 0xc9, 0x0f, 0x4a, 0x2d, 0x2c, 0x4d, 0x2d, 0x2e, 0x11, 0x12, 0xe2, 0x62, 0xc9, 0x4b, 0xcc,
-	0x4d, 0x95, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x02, 0xb3, 0x95, 0xd4, 0xb8, 0xb8, 0xa0, 0x6a,
-	0x0a, 0x72, 0x2a, 0x85, 0x24, 0xb8, 0xd8, 0x73, 0x53, 0x8b, 0x8b, 0x13, 0xd3, 0x61, 0x8a, 0x60,
-	0x5c, 0xa3, 0x44, 0x2e, 0x76, 0x77, 0x88, 0xe1, 0x42, 0x1a, 0x5c, 0x1c, 0xc1, 0x89, 0x95, 0x60,
-	0x5d, 0x42, 0xbc, 0x7a, 0xc8, 0x36, 0x48, 0x71, 0xeb, 0x21, 0x0c, 0x53, 0x62, 0x10, 0xd2, 0xe1,
-	0xe2, 0x08, 0x48, 0x2d, 0xca, 0xcc, 0x4f, 0xc9, 0x4c, 0xc6, 0xaf, 0x52, 0x83, 0xd1, 0x80, 0x31,
-	0x89, 0x0d, 0xec, 0x6a, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x6a, 0x4a, 0x48, 0xfc, 0xc6,
-	0x00, 0x00, 0x00,
+	0x2d, 0x49, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57, 0x62, 0xe7, 0x62, 0x75, 0xcd, 0x2d,
+	0x28, 0xa9, 0x54, 0x52, 0xe2, 0xe2, 0xf1, 0x48, 0xcd, 0xc9, 0xc9, 0x0f, 0x4a, 0x2d, 0x2c, 0x4d,
+	0x2d, 0x2e, 0x11, 0x12, 0xe2, 0x62, 0xc9, 0x4b, 0xcc, 0x4d, 0x95, 0x60, 0x54, 0x60, 0xd4, 0xe0,
+	0x0c, 0x02, 0xb3, 0x95, 0xd4, 0xb8, 0xb8, 0xa0, 0x6a, 0x0a, 0x72, 0x2a, 0x85, 0x24, 0xb8, 0xd8,
+	0x73, 0x53, 0x8b, 0x8b, 0x13, 0xd3, 0x61, 0x8a, 0x60, 0x5c, 0xa3, 0x3a, 0x2e, 0x76, 0x77, 0x88,
+	0x2d, 0x42, 0xd2, 0x5c, 0x9c, 0x60, 0xf3, 0x9d, 0x13, 0x73, 0x72, 0x84, 0xd8, 0xf4, 0xc0, 0x6c,
+	0x29, 0x28, 0x2d, 0xa4, 0xc1, 0xc5, 0x11, 0x9c, 0x58, 0x09, 0x36, 0x52, 0x88, 0x57, 0x0f, 0xd9,
+	0x7a, 0x29, 0x6e, 0x3d, 0x84, 0x4d, 0x4a, 0x0c, 0x42, 0x3a, 0x5c, 0x1c, 0x01, 0xa9, 0x45, 0x99,
+	0xf9, 0x29, 0x99, 0xc9, 0xf8, 0x55, 0x6a, 0x30, 0x1a, 0x30, 0x26, 0xb1, 0x81, 0xfd, 0x66, 0x0c,
+	0x08, 0x00, 0x00, 0xff, 0xff, 0xd4, 0x9a, 0x35, 0xcf, 0xec, 0x00, 0x00, 0x00,
 }
