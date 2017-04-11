@@ -17,7 +17,9 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logParts := range channel {
-			fmt.Println(logParts)
+			 for k,v := range logParts {
+				 fmt.Println(k,":", v)
+			 }
 		}
 	}(channel)
 	server.Wait()
