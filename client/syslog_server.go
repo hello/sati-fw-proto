@@ -15,6 +15,9 @@ type logDigest struct {
 	app_name string
 	message  string
 }
+func (d logDigest)Dumps() string {
+	return fmt.Sprintf("(%d)%s:%s", d.severity, d.app_name, d.message)
+}
 
 func getDefaultInt(p format.LogParts, key string, defaultVal int) int {
 	if val, ok := p[key]; ok {
@@ -58,15 +61,12 @@ func serverLoop(cb func(syslog.LogPartsChannel)) error {
 
 	return nil
 }
-func genericPrinter(channel syslog.LogPartsChannel) {
+func digestPrinter(channel syslog.LogPartsChannel) {
 	for logParts := range channel {
 		digest := parseLog(logParts)
-		fmt.Printf("\n===%d, %s==\n", digest.severity, digest.app_name)
-		for k, v := range logParts {
-			fmt.Println(k, ":", v)
-		}
+		fmt.Println(digest.Dumps())
 	}
 }
 func main() {
-	serverLoop(genericPrinter)
+	serverLoop(digestPrinter)
 }
