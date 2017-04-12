@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-
+	"time"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
@@ -14,9 +14,10 @@ type logDigest struct {
 	severity int
 	app_name string
 	message  string
+	ts	 	 time.Time
 }
 func (d logDigest)Dumps() string {
-	return fmt.Sprintf("(%d)%s:%s", d.severity, d.app_name, d.message)
+	return fmt.Sprintf("%d (%d)%s:%s", d.ts.Unix(), d.severity, d.app_name, d.message)
 }
 
 func getDefaultInt(p format.LogParts, key string, defaultVal int) int {
@@ -35,10 +36,19 @@ func getDefaultString(p format.LogParts, key string, defaultVal string) string {
 	}
 	return defaultVal
 }
+func getDefaultTime(p format.LogParts, key string, defaultVal time.Time) time.Time {
+	if val, ok := p[key]; ok {
+		if ret, ok := val.(time.Time); ok {
+			return ret
+		}
+	}
+	return defaultVal
+}
 func parseLog(part format.LogParts) (ret logDigest) {
 	ret.severity = getDefaultInt(part, "severity", 9)
 	ret.app_name = getDefaultString(part, "app_name", "")
-	ret.message = getDefaultString(part, "message", "")
+	ret.message  = getDefaultString(part, "message", "")
+	ret.ts 		 = getDefaultTime(part, "timestamp", time.Now())
 	return
 }
 func serverLoop(cb func(syslog.LogPartsChannel)) error {
