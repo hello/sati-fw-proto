@@ -1,44 +1,72 @@
 package main
+
 import (
+	"errors"
+	"fmt"
+
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
-	"fmt"
-	"errors"
-);
+)
 
+var parserError = errors.New("Unable to parse log")
 
-func parseSeverity(part format.LogParts) (int, error){
-	if val, ok := part["severity"]; ok {
+type logDigest struct {
+	severity int
+	app_name string
+	message  string
+}
+
+func getDefaultInt(p format.LogParts, key string, defaultVal int) int {
+	if val, ok := p[key]; ok {
 		if ret, ok := val.(int); ok {
-			return ret, nil
+			return ret
 		}
 	}
-	return 9, errors.New("ff")
+	return defaultVal
 }
-func main() {
+func getDefaultString(p format.LogParts, key string, defaultVal string) string {
+	if val, ok := p[key]; ok {
+		if ret, ok := val.(string); ok {
+			return ret
+		}
+	}
+	return defaultVal
+}
+func parseLog(part format.LogParts) (ret logDigest) {
+	ret.severity = getDefaultInt(part, "severity", 9)
+	ret.app_name = getDefaultString(part, "app_name", "")
+	ret.message = getDefaultString(part, "message", "")
+	return
+}
+func serverLoop(cb func(syslog.LogPartsChannel)) error {
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
 	server := syslog.NewServer()
 	server.SetFormat(syslog.RFC5424)
 	server.SetHandler(handler)
-	listenErr := server.ListenUDP("0.0.0.0:514")
-	err := server.Boot()
-	if err != nil || listenErr != nil {
-		fmt.Println("Error is", err)
-		fmt.Println("Error is", listenErr)
+	if err := server.ListenUDP("0.0.0.0:514"); err != nil {
+		fmt.Println("Error: ", err)
+		return err
 	}
-
-	go func(channel syslog.LogPartsChannel) {
-		for logParts := range channel {
-			i, _ := parseSeverity(logParts)
-			fmt.Printf("\n===%d==\n", i)
-			for k,v := range logParts {
-				fmt.Println(k,":", v)
-			}
-		}
-	}(channel)
+	if err := server.Boot(); err != nil {
+		fmt.Println("Error: ", err)
+		return err
+	}
+	go cb(channel)
 	server.Wait()
 	fmt.Printf("Server Exit")
+
+	return nil
 }
-
-
+func genericPrinter(channel syslog.LogPartsChannel) {
+	for logParts := range channel {
+		digest := parseLog(logParts)
+		fmt.Printf("\n===%d, %s==\n", digest.severity, digest.app_name)
+		for k, v := range logParts {
+			fmt.Println(k, ":", v)
+		}
+	}
+}
+func main() {
+	serverLoop(genericPrinter)
+}
