@@ -1,7 +1,20 @@
 package main
-import "gopkg.in/mcuadros/go-syslog.v2"
-import "fmt"
+import (
+	"gopkg.in/mcuadros/go-syslog.v2"
+	"gopkg.in/mcuadros/go-syslog.v2/format"
+	"fmt"
+	"errors"
+);
 
+
+func parseSeverity(part format.LogParts) (int, error){
+	if val, ok := part["severity"]; ok {
+		if ret, ok := val.(int); ok {
+			return ret, nil
+		}
+	}
+	return 9, errors.New("ff")
+}
 func main() {
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
@@ -17,9 +30,11 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logParts := range channel {
-			 for k,v := range logParts {
-				 fmt.Println(k,":", v)
-			 }
+			i, _ := parseSeverity(logParts)
+			fmt.Printf("\n===%d==\n", i)
+			for k,v := range logParts {
+				fmt.Println(k,":", v)
+			}
 		}
 	}(channel)
 	server.Wait()
