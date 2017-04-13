@@ -14,7 +14,9 @@ message HelloRequest {
   string name = 1;
 }
 message LogEntry {
-    string message = 1;
+    int32 severity = 1;
+    string app_name = 2;
+    string text = 3;
 }
 
 // The response message containing the greetings
