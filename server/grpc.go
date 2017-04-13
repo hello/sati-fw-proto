@@ -18,6 +18,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"os"
 )
 
 const (
@@ -45,9 +46,10 @@ func (s *InMemoryHelloCertStore) Exists(id string) (bool, error) {
 	return found, nil
 }
 
-func NewHelloTransportCredentialsChecker(c *tls.Config) credentials.TransportCredentials {
+func NewHelloTransportCredentialsChecker(c *tls.Config, name string) credentials.TransportCredentials {
 	m := make(map[string]bool)
 	m["sati-pii"] = true
+	m[name] = true
 	return &HelloTransportCredentialsChecker{
 		TransportCredentials: credentials.NewTLS(c),
 		store:                &InMemoryHelloCertStore{m: m},
@@ -144,7 +146,7 @@ func (s *server) Periodic(stream greeter.Greeter_PeriodicServer) error {
 	return nil
 }
 
-func serverFunc() {
+func serverFunc(name string) {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -169,7 +171,7 @@ func serverFunc() {
 		ClientCAs:    caCertPool,
 	}
 
-	serverOption := grpc.Creds(NewHelloTransportCredentialsChecker(tlsConfig))
+	serverOption := grpc.Creds(NewHelloTransportCredentialsChecker(tlsConfig, name))
 	s := grpc.NewServer(serverOption)
 	greeter.RegisterGreeterServer(s, &server{})
 	log.Println("Serving...")
@@ -179,5 +181,6 @@ func serverFunc() {
 }
 
 func main() {
-	serverFunc()
+	name := os.Args[1]
+	serverFunc(name)
 }
