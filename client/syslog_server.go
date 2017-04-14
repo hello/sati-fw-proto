@@ -1,11 +1,13 @@
-package syslogd
+package main
 
 import (
 	"errors"
 	"fmt"
+	"testing"
 	"time"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
+	"github.com/hello/sati-fw-proto/greeter"
 )
 
 var parserError = errors.New("Unable to parse log")
@@ -71,12 +73,29 @@ func serverLoop(cb func(syslog.LogPartsChannel)) error {
 
 	return nil
 }
-func digestPrinter(channel syslog.LogPartsChannel) {
-	for logParts := range channel {
-		digest := parseLog(logParts)
-		fmt.Println(digest.Dumps())
+func SyslogServerLoop(outboundChannel chan<- greeter.LogEntry) {
+	digest := func(channel syslog.LogPartsChannel) {
+		for logParts := range channel {
+			fmt.Println("Got something")
+			digest := parseLog(logParts)
+			outboundChannel<- greeter.LogEntry{
+				Severity : int32(digest.severity),
+				AppName  : digest.app_name,
+				Text     : digest.message,
+			}
+		}
 	}
+	serverLoop(digest)
 }
-func main() {
+func TestSyslog(t *testing.T) {
+/*
+ *func main() {
+ */
+	digestPrinter := func(channel syslog.LogPartsChannel) {
+		for logParts := range channel {
+			digest := parseLog(logParts)
+			fmt.Println(digest.Dumps())
+		}
+	}
 	serverLoop(digestPrinter)
 }

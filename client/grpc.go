@@ -67,7 +67,8 @@ func client(addr, crt, key string) {
 	stream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
 	logStream, err := greeter.NewGreeterClient(conn).Syslog(ctx)
 	// Contact the server and print out its response.
-	sendTicker := time.NewTicker(100 * time.Millisecond)
+	sendTicker := time.NewTicker(500 * time.Millisecond)
+	logChan := make(chan greeter.LogEntry, 100)
 
 	go func() {
 		for {
@@ -83,6 +84,7 @@ func client(addr, crt, key string) {
 		}
 	}()
 
+	go SyslogServerLoop(logChan)
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -95,11 +97,13 @@ func client(addr, crt, key string) {
 			if err3 != nil {
 				log.Fatal("err3", err3)
 			}
-			err4 := logStream.Send(&greeter.LogEntry{ Text: "Harrow"})
+		case l := <-logChan:
+			err4 := logStream.Send(&l)
 			if err4 != nil {
-				log.Fatal("err4", err3)
+				log.Fatal("err4", err4)
 			}
 		}
+
 	}
 }
 
