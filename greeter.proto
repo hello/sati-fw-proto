@@ -6,7 +6,7 @@ service Greeter {
   rpc EmptyCall(Empty) returns (Empty);
   rpc SayHello (HelloRequest) returns (HelloReply) {}
   rpc Periodic(stream HelloRequest) returns (stream HelloReply) {}
-  rpc Syslog(entry LogEntry) returns (stream HelloReply) {}
+  rpc Syslog(LogEntry) returns (HelloReply) {}
 }
 
 // The request message containing the user's name.
@@ -14,9 +14,9 @@ message HelloRequest {
   string name = 1;
 }
 message LogEntry {
-    optional int32 severity = 1;
-    optional string app_name = 2;
-    optional string text = 3;
+    int32 severity = 1;
+    string app_name = 2;
+    string text = 3;
 }
 
 // The response message containing the greetings
