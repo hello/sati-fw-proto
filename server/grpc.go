@@ -146,6 +146,31 @@ func (s *server) Periodic(stream greeter.Greeter_PeriodicServer) error {
 	return nil
 }
 
+// SayHello implements helloworld.GreeterServer
+func (s *server)Syslog(stream greeter.Greeter_SyslogServer) error {
+	peer, ok := peer.FromContext(stream.Context())
+	if !ok {
+		return errors.New("invalid peer cert")
+	}
+	tlsInfo := peer.AuthInfo.(credentials.TLSInfo)
+	v := tlsInfo.State.VerifiedChains[0][0].Subject.CommonName
+	fmt.Printf("%v - %v\n", peer.Addr.String(), v)
+
+	for {
+		for {
+			in, err := stream.Recv()
+
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("%v", err)
+			}
+			fmt.Println("name:", in.GetText())
+		}
+	}
+	return nil
+}
 func serverFunc(name string) {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
