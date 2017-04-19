@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"log"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 	"github.com/hello/sati-fw-proto/greeter"
@@ -85,7 +86,13 @@ func SyslogServerLoop(outboundChannel chan<- greeter.LogEntry) {
 			}
 		}
 	}
-	serverLoop(digest)
+	for {
+		err := serverLoop(digest)
+		if err != nil {
+			log.Fatal("Log server error", err)
+		}
+		time.Sleep(2)
+	}
 }
 func TestSyslog(t *testing.T) {
 /*
