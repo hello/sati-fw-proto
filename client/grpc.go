@@ -16,11 +16,25 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-/*
- *SyslogOutbound   chan HelloService.LogEntry
- *PeriodicOutbound chan HelloService.HelloRequest
- *PeriodicInbound  chan HelloService.HelloReply
- */
+type HelloService struct {
+	addr             string
+	crt              string
+	key              string
+	SyslogOutbound   chan *greeter.LogEntry
+	PeriodicOutbound chan *greeter.HelloRequest
+	PeriodicInbound  chan *greeter.HelloReply
+}
+
+func NewHelloService(addr, crt, key string) (*HelloService) {
+	return &HelloService {
+		addr: addr,
+		crt:  crt,
+		key:  key,
+		SyslogOutbound :   make(chan *greeter.LogEntry,		100),
+		PeriodicOutbound : make(chan *greeter.HelloRequest,	100),
+		PeriodicInbound :  make(chan *greeter.HelloReply,	100),
+	}
+}
 func getDialOptions(addr, crt, key string) ([]grpc.DialOption, error) {
 	cert, err := tls.LoadX509KeyPair(crt, key)
 	if err != nil {
@@ -53,70 +67,91 @@ func getDialOptions(addr, crt, key string) ([]grpc.DialOption, error) {
 		grpc.WithUserAgent("grpc-go-client"),
 	}, nil
 }
-func client(addr, crt, key string) {
-	dialOptions, err := getDialOptions(addr, crt, key)
+func (srv *HelloService)receivePeriodic(stream greeter.Greeter_PeriodicClient) error {
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// TODO: handle error
+			log.Fatalf("%v", err)
+			return err
+		}
+		fmt.Println("client:", resp.Message)
+		srv.PeriodicInbound <- resp
+	}
+	return nil
+}
+func (srv *HelloService)Close() {
+	close(srv.SyslogOutbound)
+	close(srv.PeriodicOutbound)
+	close(srv.PeriodicInbound)
+}
+func (srv *HelloService)ClientLoop() (error) {
+	dialOptions, err := getDialOptions(srv.addr, srv.crt, srv.key)
 	if err != nil {
 		log.Fatal(err)
-		return
+		return err
 	}
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, addr+":50051", dialOptions...)
-
+	conn, err := grpc.DialContext(ctx, srv.addr+":50051", dialOptions...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
+		return err
 	}
-
 	defer conn.Close()
 
-	c := greeter.NewGreeterClient(conn)
-
 	// Important to attempt the first call when starting to start the tls negotiation check
+	c := greeter.NewGreeterClient(conn)
 	if _, err := c.EmptyCall(ctx, &greeter.Empty{}, grpc.FailFast(true)); err != nil {
-		log.Printf("%v", err)
-		return
+		log.Fatal(err)
+		return err
 	}
 
-	stream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
+	//Make streams
+	periodicStream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
+	if err != nil {
+		return err
+	}else{
+		defer periodicStream.CloseSend()
+	}
+
 	logStream, err := greeter.NewGreeterClient(conn).Syslog(ctx)
-	// Contact the server and print out its response.
-	sendTicker := time.NewTicker(500 * time.Millisecond)
-	logChan := make(chan greeter.LogEntry, 100)
+	if err != nil {
+		return err
+	}else{
+		defer logStream.CloseSend()
+	}
 
-	go func() {
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				// TODO: handle error
-				log.Fatalf("%v", err)
-			}
-			fmt.Println("client:", resp.Message)
-		}
-	}()
-
-	go SyslogServerLoop(logChan)
+	
+	//inbound loops
+	go srv.receivePeriodic(periodicStream)
+	//outbound loop
+	var e error = nil
 	for {
 		select {
-		case <-stream.Context().Done():
-			closeErr := stream.CloseSend()
-			if closeErr != nil {
-				log.Fatal(closeErr)
+		case <-logStream.Context().Done():
+			break
+		case <-periodicStream.Context().Done():
+			break
+		case l := <-srv.SyslogOutbound:
+			e = logStream.Send(l)
+			if e != nil {
+				break
 			}
-		case <-sendTicker.C:
-			err3 := stream.Send(&greeter.HelloRequest{Name: fmt.Sprintf("name %d", time.Now().Unix())})
-			if err3 != nil {
-				log.Fatal("err3", err3)
-			}
-		case l := <-logChan:
-			err4 := logStream.Send(&l)
-			if err4 != nil {
-				log.Fatal("err4", err4)
+		case l := <-srv.PeriodicOutbound:
+			e = periodicStream.Send(l)
+			if e != nil {
+				break
 			}
 		}
 
 	}
+	if e != nil {
+		log.Fatal("Outbound error", e)
+	}
+	return e
 }
 
 func main() {
@@ -126,5 +161,20 @@ func main() {
 
 	crt := fmt.Sprintf("%s/%s.crt", name, name)
 	key := fmt.Sprintf("%s/%s.key", name, name)
-	client(addr, crt, key)
+	c := NewHelloService(addr,crt,key)
+	go SyslogServerLoop(c.SyslogOutbound)
+	go func(c chan *greeter.HelloRequest){
+		tick := time.Tick(time.Millisecond*500)
+		for {
+			select {
+			case <-tick:
+				c<- &greeter.HelloRequest{
+					Name : time.Now().String(),
+				}
+
+			}
+		}
+	}(c.PeriodicOutbound)
+	c.ClientLoop()
+	c.Close()
 }

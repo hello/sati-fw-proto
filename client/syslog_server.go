@@ -74,12 +74,12 @@ func serverLoop(cb func(syslog.LogPartsChannel)) error {
 
 	return nil
 }
-func SyslogServerLoop(outboundChannel chan<- greeter.LogEntry) {
+func SyslogServerLoop(outboundChannel chan<- *greeter.LogEntry) {
 	digest := func(channel syslog.LogPartsChannel) {
 		for logParts := range channel {
 			fmt.Println("Got something")
 			digest := parseLog(logParts)
-			outboundChannel<- greeter.LogEntry{
+			outboundChannel<- &greeter.LogEntry{
 				Severity : int32(digest.severity),
 				AppName  : digest.app_name,
 				Text     : digest.message,
