@@ -4,28 +4,34 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/hello/sati-fw-proto/greeter"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"time"
-)
-func client(addr, crt, key string) {
 
+	"github.com/hello/sati-fw-proto/greeter"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+)
+
+/*
+ *SyslogOutbound   chan HelloService.LogEntry
+ *PeriodicOutbound chan HelloService.HelloRequest
+ *PeriodicInbound  chan HelloService.HelloReply
+ */
+func getDialOptions(addr, crt, key string) ([]grpc.DialOption, error) {
 	cert, err := tls.LoadX509KeyPair(crt, key)
 	if err != nil {
-		log.Println("failed: LoadX509KeyPair", crt, key)
-		log.Fatal(err)
+		log.Fatal("Failed: LoadX509KeyPair", crt, key)
+		return nil, err
 	}
 
-	// Load CA cert
 	caCert, err := ioutil.ReadFile("ca.crt")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed: LoadCA", crt, key)
+		return nil, err
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -40,13 +46,19 @@ func client(addr, crt, key string) {
 		MaxDelay: 10 * time.Second,
 	}
 
-	dialOptions := []grpc.DialOption{
+	return []grpc.DialOption{
 		// grpc.WithTimeout(500 * time.Millisecond),
 		grpc.WithBackoffConfig(backOffConfig),
 		grpc.WithTransportCredentials(transportCreds),
 		grpc.WithUserAgent("grpc-go-client"),
+	}, nil
+}
+func client(addr, crt, key string) {
+	dialOptions, err := getDialOptions(addr, crt, key)
+	if err != nil {
+		log.Fatal(err)
+		return
 	}
-
 	ctx := context.Background()
 	conn, err := grpc.DialContext(ctx, addr+":50051", dialOptions...)
 
