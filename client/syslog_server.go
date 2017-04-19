@@ -95,9 +95,6 @@ func SyslogServerLoop(outboundChannel chan<- *greeter.LogEntry) {
 	}
 }
 func TestSyslog(t *testing.T) {
-/*
- *func main() {
- */
 	digestPrinter := func(channel syslog.LogPartsChannel) {
 		for logParts := range channel {
 			digest := parseLog(logParts)
