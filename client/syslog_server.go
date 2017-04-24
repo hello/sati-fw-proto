@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"testing"
 	"time"
 
 	"github.com/hello/sati-fw-proto/greeter"
@@ -95,13 +94,4 @@ func SyslogServerLoop(outboundChannel chan<- *greeter.LogEntry) {
 		}
 		time.Sleep(2)
 	}
-}
-func TestSyslog(t *testing.T) {
-	digestPrinter := func(channel syslog.LogPartsChannel) {
-		for logParts := range channel {
-			digest := parseLog(logParts)
-			fmt.Println(digest.Dumps())
-		}
-	}
-	serverLoop(digestPrinter)
 }
