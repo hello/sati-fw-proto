@@ -18,6 +18,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"os"
 )
 
 const (
@@ -45,9 +46,10 @@ func (s *InMemoryHelloCertStore) Exists(id string) (bool, error) {
 	return found, nil
 }
 
-func NewHelloTransportCredentialsChecker(c *tls.Config) credentials.TransportCredentials {
+func NewHelloTransportCredentialsChecker(c *tls.Config, name string) credentials.TransportCredentials {
 	m := make(map[string]bool)
 	m["sati-pii"] = true
+	m[name] = true
 	return &HelloTransportCredentialsChecker{
 		TransportCredentials: credentials.NewTLS(c),
 		store:                &InMemoryHelloCertStore{m: m},
@@ -144,7 +146,32 @@ func (s *server) Periodic(stream greeter.Greeter_PeriodicServer) error {
 	return nil
 }
 
-func serverFunc() {
+// SayHello implements helloworld.GreeterServer
+func (s *server)Syslog(stream greeter.Greeter_SyslogServer) error {
+	peer, ok := peer.FromContext(stream.Context())
+	if !ok {
+		return errors.New("invalid peer cert")
+	}
+	tlsInfo := peer.AuthInfo.(credentials.TLSInfo)
+	v := tlsInfo.State.VerifiedChains[0][0].Subject.CommonName
+	fmt.Printf("%v - %v\n", peer.Addr.String(), v)
+
+	for {
+		for {
+			in, err := stream.Recv()
+
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("%v", err)
+			}
+			fmt.Println("name:", in.GetText())
+		}
+	}
+	return nil
+}
+func serverFunc(name string) {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -169,7 +196,7 @@ func serverFunc() {
 		ClientCAs:    caCertPool,
 	}
 
-	serverOption := grpc.Creds(NewHelloTransportCredentialsChecker(tlsConfig))
+	serverOption := grpc.Creds(NewHelloTransportCredentialsChecker(tlsConfig, name))
 	s := grpc.NewServer(serverOption)
 	greeter.RegisterGreeterServer(s, &server{})
 	log.Println("Serving...")
@@ -179,5 +206,6 @@ func serverFunc() {
 }
 
 func main() {
-	serverFunc()
+	name := os.Args[1]
+	serverFunc(name)
 }

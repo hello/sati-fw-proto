@@ -25,7 +25,7 @@ argv[2] = folder where custom ssl cert is located
 To add it to your hosts file:
 
 ```
-echo "127.0.0.1    sati.locahost" | sudo tee -a /etc/hosts
+echo "127.0.0.1    sati.localhost" | sudo tee -a /etc/hosts
 ```
 
 
