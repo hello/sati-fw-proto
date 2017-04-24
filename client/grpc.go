@@ -25,14 +25,14 @@ type HelloService struct {
 	PeriodicInbound  chan *greeter.HelloReply
 }
 
-func NewHelloService(addr, crt, key string) (*HelloService) {
-	return &HelloService {
-		addr: addr,
-		crt:  crt,
-		key:  key,
-		SyslogOutbound :   make(chan *greeter.LogEntry,		100),
-		PeriodicOutbound : make(chan *greeter.HelloRequest,	100),
-		PeriodicInbound :  make(chan *greeter.HelloReply,	100),
+func NewHelloService(addr, crt, key string) *HelloService {
+	return &HelloService{
+		addr:             addr,
+		crt:              crt,
+		key:              key,
+		SyslogOutbound:   make(chan *greeter.LogEntry, 100),
+		PeriodicOutbound: make(chan *greeter.HelloRequest, 100),
+		PeriodicInbound:  make(chan *greeter.HelloReply, 100),
 	}
 }
 func getDialOptions(addr, crt, key string) ([]grpc.DialOption, error) {
@@ -67,7 +67,7 @@ func getDialOptions(addr, crt, key string) ([]grpc.DialOption, error) {
 		grpc.WithUserAgent("grpc-go-client"),
 	}, nil
 }
-func (srv *HelloService)receivePeriodic(stream greeter.Greeter_PeriodicClient) error {
+func (srv *HelloService) receivePeriodic(stream greeter.Greeter_PeriodicClient) error {
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -83,12 +83,12 @@ func (srv *HelloService)receivePeriodic(stream greeter.Greeter_PeriodicClient) e
 	}
 	return nil
 }
-func (srv *HelloService)Close() {
+func (srv *HelloService) Close() {
 	close(srv.SyslogOutbound)
 	close(srv.PeriodicOutbound)
 	close(srv.PeriodicInbound)
 }
-func (srv *HelloService)ClientLoop() (error) {
+func (srv *HelloService) ClientLoop() error {
 	dialOptions, err := getDialOptions(srv.addr, srv.crt, srv.key)
 	if err != nil {
 		log.Fatal(err)
@@ -113,18 +113,17 @@ func (srv *HelloService)ClientLoop() (error) {
 	periodicStream, err := greeter.NewGreeterClient(conn).Periodic(ctx)
 	if err != nil {
 		return err
-	}else{
+	} else {
 		defer periodicStream.CloseSend()
 	}
 
 	logStream, err := greeter.NewGreeterClient(conn).Syslog(ctx)
 	if err != nil {
 		return err
-	}else{
+	} else {
 		defer logStream.CloseSend()
 	}
 
-	
 	//inbound loops
 	go srv.receivePeriodic(periodicStream)
 	//outbound loop
@@ -161,15 +160,15 @@ func main() {
 
 	crt := fmt.Sprintf("%s/%s.crt", name, name)
 	key := fmt.Sprintf("%s/%s.key", name, name)
-	c := NewHelloService(addr,crt,key)
+	c := NewHelloService(addr, crt, key)
 	go SyslogServerLoop(c.SyslogOutbound)
-	go func(c chan *greeter.HelloRequest){
-		tick := time.Tick(time.Millisecond*500)
+	go func(c chan *greeter.HelloRequest) {
+		tick := time.Tick(time.Millisecond * 500)
 		for {
 			select {
 			case <-tick:
-				c<- &greeter.HelloRequest{
-					Name : time.Now().String(),
+				c <- &greeter.HelloRequest{
+					Name: time.Now().String(),
 				}
 
 			}

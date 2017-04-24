@@ -3,12 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"testing"
 	"time"
-	"log"
+
+	"github.com/hello/sati-fw-proto/greeter"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
-	"github.com/hello/sati-fw-proto/greeter"
 )
 
 var parserError = errors.New("Unable to parse log")
@@ -17,9 +18,10 @@ type logDigest struct {
 	severity int
 	app_name string
 	message  string
-	ts	 	 time.Time
+	ts       time.Time
 }
-func (d logDigest)Dumps() string {
+
+func (d logDigest) Dumps() string {
 	return fmt.Sprintf("%d (%d)%s:%s", d.ts.Unix(), d.severity, d.app_name, d.message)
 }
 
@@ -50,8 +52,8 @@ func getDefaultTime(p format.LogParts, key string, defaultVal time.Time) time.Ti
 func parseLog(part format.LogParts) (ret logDigest) {
 	ret.severity = getDefaultInt(part, "severity", 9)
 	ret.app_name = getDefaultString(part, "app_name", "")
-	ret.message  = getDefaultString(part, "message", "")
-	ret.ts 		 = getDefaultTime(part, "timestamp", time.Now())
+	ret.message = getDefaultString(part, "message", "")
+	ret.ts = getDefaultTime(part, "timestamp", time.Now())
 	return
 }
 func serverLoop(cb func(syslog.LogPartsChannel)) error {
@@ -79,10 +81,10 @@ func SyslogServerLoop(outboundChannel chan<- *greeter.LogEntry) {
 		for logParts := range channel {
 			fmt.Println("Got something")
 			digest := parseLog(logParts)
-			outboundChannel<- &greeter.LogEntry{
-				Severity : int32(digest.severity),
-				AppName  : digest.app_name,
-				Text     : digest.message,
+			outboundChannel <- &greeter.LogEntry{
+				Severity: int32(digest.severity),
+				AppName:  digest.app_name,
+				Text:     digest.message,
 			}
 		}
 	}
